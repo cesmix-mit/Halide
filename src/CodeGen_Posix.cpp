@@ -87,8 +87,6 @@ CodeGen_Posix::Allocation CodeGen_Posix::create_allocation(const std::string &na
     Value *llvm_size = nullptr;
     int64_t stack_bytes = 0;
     int32_t constant_bytes = Allocate::constant_allocation_size(extents, name);
-    std::cout << "Allocation name is " << name << "\n";
-    std::cout << "Poisx allocation:" << constant_bytes << "\n";
     if (constant_bytes > 0) {
         constant_bytes *= type.bytes();
         stack_bytes = constant_bytes;
@@ -141,7 +139,6 @@ CodeGen_Posix::Allocation CodeGen_Posix::create_allocation(const std::string &na
         cur_stack_alloc_total += allocation.stack_bytes;
         debug(4) << "cur_stack_alloc_total += " << allocation.stack_bytes << " -> " << cur_stack_alloc_total << " for " << name << "\n";
     } else if (!new_expr.defined() && stack_bytes != 0) {
-      std::cout << "Stack allocation!\n";
         // Try to find a free stack allocation we can use.
         vector<Allocation>::iterator it = free_stack_allocs.end();
         for (it = free_stack_allocs.begin(); it != free_stack_allocs.end(); ++it) {
@@ -159,7 +156,12 @@ CodeGen_Posix::Allocation CodeGen_Posix::create_allocation(const std::string &na
                 break;
             }
         }
-        if (false) {
+	#ifdef TAPIR_VERSION_MAJOR
+	bool test = false;
+	#elseif 
+	bool test = it != free_stack_allocs.end();
+	#endif
+        if (test) {
             debug(4) << "Reusing freed stack allocation of " << it->stack_bytes
                      << " bytes for allocation " << name
                      << " of " << stack_bytes << " bytes.\n";

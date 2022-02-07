@@ -693,6 +693,7 @@ BasicBlock *CodeGen_LLVM::get_destructor_block() {
         // Calls to destructors will get inserted here.
 
         // The last instruction is the return op that returns it.
+#ifdef TAPIR_VERSION_MAJOR
 	int detachsize = detaches.size();
 	if (detachsize != 0){
 	  BasicBlock * attach_bb = detaches[detachsize - 1];
@@ -701,7 +702,9 @@ BasicBlock *CodeGen_LLVM::get_destructor_block() {
 	} else {
 	  builder->CreateRet(error_code);
 	}
-
+#elseif
+	builder->CreateRet(error_code);
+#endif
         // Jump back to where we were.
         builder->restoreIP(here);
     }
@@ -1267,8 +1270,12 @@ void CodeGen_LLVM::optimize_module() {
     }
 #endif
 
-    //    mpm = pb.buildPerModuleDefaultPipeline(level, debug_pass_manager);
-    mpm = pb.buildPerModuleDefaultPipeline(level, false, TLII->hasTapirTarget());
+    //    
+#ifdef TAPIR_VERSION_MAJOR
+      mpm = pb.buildPerModuleDefaultPipeline(level, false, TLII->hasTapirTarget());
+#elseif
+      mpm = pb.buildPerModuleDefaultPipeline(level, debug_pass_manager);
+#endif
     mpm.run(*module, mam);
 
     if (llvm::verifyModule(*module, &errs())) {
@@ -3653,7 +3660,11 @@ void CodeGen_LLVM::visit(const For *op) {
     const Acquire *acquire = op->body.as<Acquire>();
 
     // TODO(zalman): remove this after validating it doesn't happen
+    #ifdef TAPIR_VERSION_MAJOR
     bool fortest = false; //op->for_type == ForType::Parallel;
+    #elseif
+    bool fortest = op->for_type == ForType::Parallel;
+    #endif
     internal_assert(!(fortest ||
                       (op->for_type == ForType::Serial &&
                        acquire &&
@@ -3713,8 +3724,6 @@ void CodeGen_LLVM::visit(const For *op) {
 	BasicBlock *sync_bb = BasicBlock::Create(*context, std::string("exit_parallel_for_") + op->name, function);
 
 	//Create synch before we enter the head.
-
-
 	Value *SyncRegion = builder->CreateCall(llvm::Intrinsic::getDeclaration(function->getParent(), llvm::Intrinsic::syncregion_start),{});
 	SynchRegions.push_back(SyncRegion);
 
@@ -3726,18 +3735,21 @@ void CodeGen_LLVM::visit(const For *op) {
 	//Create our phi node; detachand go into the loop
 	PHINode *phi = builder->CreatePHI(i32_t, 2);
 	phi->addIncoming(min, preheader_bb);
+	//detach into the loop
 	builder->CreateDetach(loop_bb, attach_bb, SyncRegion);
 	detaches.push_back(attach_bb);
+
+	//manager proper destructor blocks
 	BasicBlock * destructor_block_old = destructor_block;
 	destructor_block = nullptr;
         builder->SetInsertPoint(loop_bb);
-	
+	//Generate the loop
 	loops.push_back(loop_bb);
 	sym_push(op->name, phi);
 	codegen(op->body);
 	loops.pop_back();
 	detaches.pop_back();
-	
+	///reattach into the attach_bb
 	builder->CreateReattach(attach_bb, SyncRegion);
 	destructor_block = destructor_block_old;
 
@@ -3754,7 +3766,7 @@ void CodeGen_LLVM::visit(const For *op) {
         builder->CreateSync(sync_bb, SyncRegion);
 	SynchRegions.pop_back();
         builder->SetInsertPoint(sync_bb);
-	//	llvm::errs() << *function;
+
     }
     #endif
     else {

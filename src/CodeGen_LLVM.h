@@ -148,10 +148,11 @@ protected:
     llvm::MDNode *strict_fp_math_md;
     std::vector<LoweredArgument> current_function_args;
     //@}
-
+    #ifdef TAPIR_VERSION_MAJOR
     std::vector<llvm::BasicBlock *> detaches;
     std::vector<llvm::BasicBlock *> loops;
     std::vector<llvm::Value *> SynchRegions;
+    #endif 
     
 
     /** The target we're generating code for */
