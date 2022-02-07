@@ -149,6 +149,11 @@ protected:
     std::vector<LoweredArgument> current_function_args;
     //@}
 
+    std::vector<llvm::BasicBlock *> detaches;
+    std::vector<llvm::BasicBlock *> loops;
+    std::vector<llvm::Value *> SynchRegions;
+    
+
     /** The target we're generating code for */
     Halide::Target target;
 

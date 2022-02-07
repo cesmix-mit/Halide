@@ -247,6 +247,10 @@ void JITModule::compile_module(std::unique_ptr<llvm::Module> m, const string &fu
 
     // Ensure that LLVM is initialized
     CodeGen_LLVM::initialize_llvm();
+    llvm::sys::DynamicLibrary::LoadLibraryPermanently("/data/scratch/teoc/projects/exasimTiramisu/exasim/tests/Exasim/External/cheetah/build/lib/x86_64-unknown-linux-gnu/libopencilk.so");
+    llvm::sys::DynamicLibrary::LoadLibraryPermanently("/data/scratch/teoc/projects/exasimTiramisu/exasim/tests/Exasim/External/cheetah/build/lib/x86_64-unknown-linux-gnu/libopencilk-personality-cpp.so");
+    llvm::sys::DynamicLibrary::LoadLibraryPermanently("/data/scratch/teoc/projects/exasimTiramisu/exasim/tests/Exasim/External/cheetah/build/lib/x86_64-unknown-linux-gnu/libopencilk-personality-c.so");
+    llvm::sys::DynamicLibrary::LoadLibraryPermanently("/data/scratch/teoc/projects/exasimTiramisu/exasim/tests/Exasim/External/cheetah/build/lib/x86_64-unknown-linux-gnu/libopencilk-predigrees.so");
 
     // Make the execution engine
     debug(2) << "Creating new execution engine\n";
@@ -893,6 +897,7 @@ std::vector<JITModule> JITSharedRuntime::get(llvm::Module *for_module, const Tar
     std::vector<JITModule> result;
 
     JITModule m = make_module(for_module, target, MainShared, result, create);
+
     if (m.compiled()) {
         result.push_back(m);
     }

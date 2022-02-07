@@ -373,6 +373,7 @@ add_library(Halide
 add_library(Halide::Halide ALIAS Halide)
 
 target_link_libraries(Halide PUBLIC Threads::Threads)
+target_link_libraries(Halide PUBLIC CilkThreads::Threads)
 target_link_libraries(Halide PRIVATE Halide::LLVM)
 target_link_libraries(Halide PUBLIC Halide::LanguageOptions)
 target_compile_definitions(Halide PRIVATE $<$<STREQUAL:$<TARGET_PROPERTY:TYPE>,STATIC_LIBRARY>:Halide_STATIC_DEFINE>)
@@ -386,7 +387,7 @@ target_export_script(Halide
                      GNU_LD "${CMAKE_CURRENT_LIST_DIR}/exported_symbols.ldscript")
 
 set(Halide_SOVERSION_OVERRIDE "${Halide_VERSION_MAJOR}"
-    CACHE STRING "SOVERSION to set for custom Halide packaging")
+  CACHE STRING "SOVERSION to set for custom Halide packaging")
 mark_as_advanced(Halide_SOVERSION_OVERRIDE)
 
 set_target_properties(Halide PROPERTIES

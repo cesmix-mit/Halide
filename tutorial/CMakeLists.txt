@@ -75,8 +75,9 @@ if (TARGET_NVPTX)
                               "${CMAKE_CURRENT_BINARY_DIR}/${FILTER_LIB}"
                               Halide::Runtime
                               Threads::Threads
+			      CilkThreads::Threads
                               ${CMAKE_DL_LIBS})
-
+			    
         # Undocumented function in HalideGeneratorHelpers. Do not call in external code.
         # Users of the AOT functions (as opposed to Generators) should link to the relevant
         # GPU libraries manually.

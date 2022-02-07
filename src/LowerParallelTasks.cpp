@@ -109,10 +109,10 @@ class MinThreads : public IRVisitor {
         result = 0;
 
         if (op->for_type == ForType::Parallel) {
-            IRVisitor::visit(op);
-            if (result > 0) {
-                result += 1;
-            }
+            // IRVisitor::visit(op);
+            // if (result > 0) {
+            //     result += 1;
+            // }
         } else if (op->for_type == ForType::Serial) {
             auto after_acquires = skip_acquires(op->body);
             if (after_acquires.second > 0 &&
@@ -175,8 +175,8 @@ struct LowerParallelTasks : public IRMutator {
 
     Stmt visit(const For *op) override {
         const Acquire *acquire = op->body.as<Acquire>();
-
-        if (op->for_type == ForType::Parallel ||
+	bool fortest = false; //op->for_type == ForType::Parallel
+        if (fortest ||
             (op->for_type == ForType::Serial &&
              acquire &&
              !expr_uses_var(acquire->count, op->name))) {
@@ -373,9 +373,10 @@ struct LowerParallelTasks : public IRMutator {
             }
             result.emplace_back(std::move(t));
         } else if (loop && loop->for_type == ForType::Parallel) {
-            add_suffix(prefix, ".par_for." + loop->name);
-            ParallelTask t{loop->body, {}, loop->name, loop->min, loop->extent, const_false(), task_debug_name(prefix)};
-            result.emplace_back(std::move(t));
+	  //PAR
+            // add_suffix(prefix, ".par_for." + loop->name);
+            // ParallelTask t{loop->body, {}, loop->name, loop->min, loop->extent, const_false(), task_debug_name(prefix)};
+            // result.emplace_back(std::move(t));
         } else if (loop &&
                    loop->for_type == ForType::Serial &&
                    acquire &&

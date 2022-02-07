@@ -2,6 +2,7 @@
 #include <memory>
 #include <sstream>
 
+
 #include "CPlusPlusMangle.h"
 #include "CSE.h"
 #include "CodeGen_Internal.h"
@@ -27,7 +28,10 @@
 #include "Pipeline.h"
 #include "Simplify.h"
 #include "Util.h"
-
+#ifdef TAPIR_VERSION_MAJOR
+#include <llvm/Transforms/Tapir/CilkABI.h>
+#include "llvm/Support/Process.h"
+#endif
 // MSVC won't set __cplusplus correctly unless certain compiler flags are set
 // (and CMake doesn't set those flags for you even if you specify C++17),
 // so we need to check against _MSVC_LANG as well, for completeness.
@@ -631,6 +635,7 @@ void CodeGen_LLVM::end_func(const std::vector<LoweredArgument> &args) {
         }
     }
 
+
     internal_assert(!verifyFunction(*function, &llvm::errs()));
 
     current_function_args.clear();
@@ -688,7 +693,14 @@ BasicBlock *CodeGen_LLVM::get_destructor_block() {
         // Calls to destructors will get inserted here.
 
         // The last instruction is the return op that returns it.
-        builder->CreateRet(error_code);
+	int detachsize = detaches.size();
+	if (detachsize != 0){
+	  BasicBlock * attach_bb = detaches[detachsize - 1];
+	  Value * SynchRegion = SynchRegions[detachsize - 1];
+	  builder->CreateReattach(attach_bb, SynchRegion);
+	} else {
+	  builder->CreateRet(error_code);
+	}
 
         // Jump back to where we were.
         builder->restoreIP(here);
@@ -1110,6 +1122,8 @@ void CodeGen_LLVM::optimize_module() {
     llvm::PassBuilder pb(/*DebugLogging*/ false, tm.get(), pto);
 #endif
 
+
+
     bool debug_pass_manager = false;
     // These analysis managers have to be declared in this order.
 #if LLVM_VERSION >= 130
@@ -1126,6 +1140,25 @@ void CodeGen_LLVM::optimize_module() {
 
     llvm::AAManager aa = pb.buildDefaultAAPipeline();
     fam.registerPass([&] { return std::move(aa); });
+
+#ifdef TAPIR_VERSION_MAJOR
+    //TargetLibraryAnalysis?
+    Triple TargetTriple(module->getTargetTriple());
+    TargetLibraryInfoImpl * TLII = new TargetLibraryInfoImpl(TargetTriple);
+    Optional<std::string> Path =
+      llvm::sys::Process::FindInEnvPath("LIBRARY_PATH", "libopencilk-abi.bc");
+    if (!Path.hasValue()) {
+      errs() << "Error: Cannot find OpenCilk runtime-ABI bitcode file "
+	"LIBRARY_PATH.\n";
+    }
+    TLII->setTapirTarget(TapirTargetID::OpenCilk);
+    TLII->setTapirTargetOptions(
+			       std::make_unique<OpenCilkABIOptions>(*Path));
+    TLII->addTapirTargetLibraryFunctions();
+
+    fam.registerPass([&] { return TargetLibraryAnalysis(*TLII);});
+#endif
+
 
     // Register all the basic analyses with the managers.
     pb.registerModuleAnalyses(mam);
@@ -1234,7 +1267,8 @@ void CodeGen_LLVM::optimize_module() {
     }
 #endif
 
-    mpm = pb.buildPerModuleDefaultPipeline(level, debug_pass_manager);
+    //    mpm = pb.buildPerModuleDefaultPipeline(level, debug_pass_manager);
+    mpm = pb.buildPerModuleDefaultPipeline(level, false, TLII->hasTapirTarget());
     mpm.run(*module, mam);
 
     if (llvm::verifyModule(*module, &errs())) {
@@ -1248,9 +1282,9 @@ void CodeGen_LLVM::optimize_module() {
 
     auto *logger = get_compiler_logger();
     if (logger) {
-        auto time_end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double> diff = time_end - time_start;
-        logger->record_compilation_time(CompilerLogger::Phase::LLVM, diff.count());
+      auto time_end = std::chrono::high_resolution_clock::now();
+      std::chrono::duration<double> diff = time_end - time_start;
+      logger->record_compilation_time(CompilerLogger::Phase::LLVM, diff.count());
     }
 }
 
@@ -3567,6 +3601,16 @@ void CodeGen_LLVM::create_assertion(Value *cond, const Expr &message, llvm::Valu
     // Build the failure case
     builder->SetInsertPoint(assert_fails_bb);
 
+    //Detach all synch regions
+    // int numRegions = SynchRegions.size() - 1;
+    // for(int i=numRegions; i >= 0; i--){
+    //   BasicBlock *next_bb = BasicBlock::Create(*context, "assert failed detach #" + std::to_string(i), function);
+    //   BasicBlock * attach_bb = detaches[i];
+    //   Value * SyncRegion = SynchRegions[i];
+    //   builder->CreateReattach(next_bb, SyncRegion);
+    //   builder->SetInsertPoint(next_bb);
+    // }
+
     // Call the error handler
     if (!error_code) {
         error_code = codegen(message);
@@ -3609,7 +3653,8 @@ void CodeGen_LLVM::visit(const For *op) {
     const Acquire *acquire = op->body.as<Acquire>();
 
     // TODO(zalman): remove this after validating it doesn't happen
-    internal_assert(!(op->for_type == ForType::Parallel ||
+    bool fortest = false; //op->for_type == ForType::Parallel;
+    internal_assert(!(fortest ||
                       (op->for_type == ForType::Serial &&
                        acquire &&
                        !expr_uses_var(acquire->count, op->name))));
@@ -3654,7 +3699,65 @@ void CodeGen_LLVM::visit(const For *op) {
 
         // Pop the loop variable from the scope
         sym_pop(op->name);
-    } else {
+    }
+#ifdef TAPIR_VERSION_MAJOR
+    else if (op->for_type == ForType::Parallel) {
+      
+        Value *max = builder->CreateNSWAdd(min, extent);
+
+        BasicBlock *preheader_bb = builder->GetInsertBlock();
+	BasicBlock *head_bb = BasicBlock::Create(*context, std::string("parallel_head_") + op->name, function);
+        BasicBlock *loop_bb = BasicBlock::Create(*context, std::string("parallel_for_") + op->name, function);
+	BasicBlock *attach_bb = BasicBlock::Create(*context, std::string("parallel_attach_for_") + op->name, function);
+	BasicBlock *after_bb = BasicBlock::Create(*context, std::string("inc_&_cond_parallel_for_") + op->name, function);
+	BasicBlock *sync_bb = BasicBlock::Create(*context, std::string("exit_parallel_for_") + op->name, function);
+
+	//Create synch before we enter the head.
+
+
+	Value *SyncRegion = builder->CreateCall(llvm::Intrinsic::getDeclaration(function->getParent(), llvm::Intrinsic::syncregion_start),{});
+	SynchRegions.push_back(SyncRegion);
+
+	//Test if we should enter the loop -> [head, after]
+	Value *enter_condition = builder->CreateICmpSLT(min, max);
+        builder->CreateCondBr(enter_condition, head_bb, after_bb, very_likely_branch);
+	builder->SetInsertPoint(head_bb);
+
+	//Create our phi node; detachand go into the loop
+	PHINode *phi = builder->CreatePHI(i32_t, 2);
+	phi->addIncoming(min, preheader_bb);
+	builder->CreateDetach(loop_bb, attach_bb, SyncRegion);
+	detaches.push_back(attach_bb);
+	BasicBlock * destructor_block_old = destructor_block;
+	destructor_block = nullptr;
+        builder->SetInsertPoint(loop_bb);
+	
+	loops.push_back(loop_bb);
+	sym_push(op->name, phi);
+	codegen(op->body);
+	loops.pop_back();
+	detaches.pop_back();
+	
+	builder->CreateReattach(attach_bb, SyncRegion);
+	destructor_block = destructor_block_old;
+
+	//Update the loop in the attach and check if we should terminate; if we terminate, synch in after; other head to head.
+	builder->SetInsertPoint(attach_bb);
+        Value *next_var = builder->CreateNSWAdd(phi, ConstantInt::get(i32_t, 1));
+	phi->addIncoming(next_var, builder->GetInsertBlock());
+        Value *end_condition = builder->CreateICmpNE(next_var, max);
+        builder->CreateCondBr(end_condition, head_bb, after_bb);
+
+	//End and terminate sync
+	builder->SetInsertPoint(after_bb);
+        sym_pop(op->name);
+        builder->CreateSync(sync_bb, SyncRegion);
+	SynchRegions.pop_back();
+        builder->SetInsertPoint(sync_bb);
+	//	llvm::errs() << *function;
+    }
+    #endif
+    else {
         internal_error << "Unknown type of For node. Only Serial and Parallel For nodes should survive down to codegen.\n";
     }
 }
@@ -4315,7 +4418,15 @@ void CodeGen_LLVM::visit(const Atomic *op) {
 
 Value *CodeGen_LLVM::create_alloca_at_entry(llvm::Type *t, int n, bool zero_initialize, const string &name) {
     IRBuilderBase::InsertPoint here = builder->saveIP();
-    BasicBlock *entry = &builder->GetInsertBlock()->getParent()->getEntryBlock();
+    BasicBlock * entry;
+    if (loops.size() == 0){
+      entry = &builder->GetInsertBlock()->getParent()->getEntryBlock();
+    }
+    else {
+      entry = loops[loops.size() - 1];
+    }
+    std::cout << "Appending to " << entry->getName().str() << "\n";    
+    //Parallel
     if (entry->empty()) {
         builder->SetInsertPoint(entry);
     } else {

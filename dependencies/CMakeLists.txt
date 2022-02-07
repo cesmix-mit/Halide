@@ -6,6 +6,9 @@ set(THREADS_PREFER_PTHREAD_FLAG YES)
 find_package(Threads REQUIRED)
 set_target_properties(Threads::Threads PROPERTIES IMPORTED_GLOBAL TRUE)
 
+#SET(CILK_FLAG_Clang "-fopencilk")
+find_package(CilkThreads REQUIRED HINTS "${LLVM_DIR}/../clang")
+set_target_properties(CilkThreads::Threads PROPERTIES IMPORTED_GLOBAL TRUE)
 # TODO(https://github.com/halide/Halide/issues/5633): verify this is still correct / necessary for OpenGLCompute
 find_package(OpenGL)
 if (TARGET OpenGL::GL)

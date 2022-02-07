@@ -1,0 +1,13 @@
+
+src/CMakeLists.txt:375:target_link_libraries(Halide PUBLIC Threads::Threads)
+tools/CMakeLists.txt:38:target_link_libraries(Halide_RunGenMain INTERFACE Halide::Runtime Halide::ImageIO Threads::Threads)
+tools/CMakeLists.txt:44:target_link_libraries(Halide_Generator INTERFACE Halide::Halide Threads::Threads ${CMAKE_DL_LIBS})
+tutorial/CMakeLists.txt:77:                              Threads::Threads
+cmake/HalideTestHelpers.cmake:19:    target_link_libraries(Halide_test INTERFACE Halide::Halide Threads::Threads)
+cmake/HalideGeneratorHelpers.cmake:425:    target_link_libraries("${RT}" INTERFACE Halide::Runtime Threads::Threads ${CMAKE_DL_LIBS})
+
+CilkThreads
+
+dependencies/CMakeLists.txt:6:find_package(Threads REQUIRED)
+dependencies/CMakeLists.txt:7:set_target_properties(Threads::Threads PROPERTIES IMPORTED_GLOBAL TRUE)
+packaging/common/HalideHelpersConfig.cmake:8:find_dependency(Threads)

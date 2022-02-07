@@ -16,7 +16,7 @@ if (NOT TARGET Halide::Test)
     add_library(Halide::Test ALIAS Halide_test)
 
     # Obviously, link to the main library
-    target_link_libraries(Halide_test INTERFACE Halide::Halide Threads::Threads)
+    target_link_libraries(Halide_test INTERFACE Halide::Halide Threads::Threads  CilkThreads::Threads)
 
     # Everyone gets to see the common headers
     target_include_directories(Halide_test

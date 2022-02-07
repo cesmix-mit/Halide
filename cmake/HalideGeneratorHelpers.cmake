@@ -420,9 +420,9 @@ function(_Halide_add_halide_runtime RT)
         add_library("${RT}" STATIC ${GEN_OUTS})
         set_target_properties("${RT}" PROPERTIES LINKER_LANGUAGE CXX)
         _Halide_fix_xcode("${RT}")
-    endif ()
+      endif ()
 
-    target_link_libraries("${RT}" INTERFACE Halide::Runtime Threads::Threads ${CMAKE_DL_LIBS})
+    target_link_libraries("${RT}" INTERFACE Halide::Runtime Threads::Threads  CilkThreads::Threads ${CMAKE_DL_LIBS})
     _Halide_add_targets_to_runtime("${RT}" TARGETS ${ARG_TARGETS})
 endfunction()
 
