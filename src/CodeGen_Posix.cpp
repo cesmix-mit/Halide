@@ -158,7 +158,7 @@ CodeGen_Posix::Allocation CodeGen_Posix::create_allocation(const std::string &na
         }
 	#ifdef TAPIR_VERSION_MAJOR
 	bool test = false;
-	#elseif 
+	#else
 	bool test = it != free_stack_allocs.end();
 	#endif
         if (test) {

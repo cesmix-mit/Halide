@@ -702,7 +702,7 @@ BasicBlock *CodeGen_LLVM::get_destructor_block() {
 	} else {
 	  builder->CreateRet(error_code);
 	}
-#elseif
+#else
 	builder->CreateRet(error_code);
 #endif
         // Jump back to where we were.
@@ -1149,10 +1149,10 @@ void CodeGen_LLVM::optimize_module() {
     Triple TargetTriple(module->getTargetTriple());
     TargetLibraryInfoImpl * TLII = new TargetLibraryInfoImpl(TargetTriple);
     Optional<std::string> Path =
-      llvm::sys::Process::FindInEnvPath("LIBRARY_PATH", "libopencilk-abi.bc");
+      llvm::sys::Process::FindInEnvPath("LD_LIBRARY_PATH", "libopencilk-abi.bc");
     if (!Path.hasValue()) {
       errs() << "Error: Cannot find OpenCilk runtime-ABI bitcode file "
-	"LIBRARY_PATH.\n";
+	"LD_LIBRARY_PATH.\n";
     }
     TLII->setTapirTarget(TapirTargetID::OpenCilk);
     TLII->setTapirTargetOptions(
@@ -1273,7 +1273,7 @@ void CodeGen_LLVM::optimize_module() {
     //    
 #ifdef TAPIR_VERSION_MAJOR
       mpm = pb.buildPerModuleDefaultPipeline(level, false, TLII->hasTapirTarget());
-#elseif
+#else
       mpm = pb.buildPerModuleDefaultPipeline(level, debug_pass_manager);
 #endif
     mpm.run(*module, mam);
@@ -3662,7 +3662,7 @@ void CodeGen_LLVM::visit(const For *op) {
     // TODO(zalman): remove this after validating it doesn't happen
     #ifdef TAPIR_VERSION_MAJOR
     bool fortest = false; //op->for_type == ForType::Parallel;
-    #elseif
+    #else
     bool fortest = op->for_type == ForType::Parallel;
     #endif
     internal_assert(!(fortest ||
@@ -4437,7 +4437,7 @@ Value *CodeGen_LLVM::create_alloca_at_entry(llvm::Type *t, int n, bool zero_init
     else {
       entry = loops[loops.size() - 1];
     }
-    std::cout << "Appending to " << entry->getName().str() << "\n";    
+
     //Parallel
     if (entry->empty()) {
         builder->SetInsertPoint(entry);

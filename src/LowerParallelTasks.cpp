@@ -110,7 +110,7 @@ class MinThreads : public IRVisitor {
 
         if (op->for_type == ForType::Parallel) {
 #ifdef TAPIR_VERSION_MAJOR
-#elseif 
+#else
 	  IRVisitor::visit(op);
 	  if (result > 0) {
 	    result += 1;
@@ -179,9 +179,9 @@ struct LowerParallelTasks : public IRMutator {
     Stmt visit(const For *op) override {
         const Acquire *acquire = op->body.as<Acquire>();
 	#ifdef TAPIR_VERSION_MAJOR
-	bool test = false;
-	#elseif 
-	bool test = it != free_stack_allocs.end();
+	bool fortest = false;
+	#else
+	bool fortest = op->for_type == ForType::Parallel;
 	#endif
         if (fortest ||
             (op->for_type == ForType::Serial &&
@@ -381,6 +381,7 @@ struct LowerParallelTasks : public IRMutator {
             result.emplace_back(std::move(t));
         }
 #ifdef TAPIR_VERSION_MAJOR
+#else
 	else if (loop && loop->for_type == ForType::Parallel) {
             add_suffix(prefix, ".par_for." + loop->name);
             ParallelTask t{loop->body, {}, loop->name, loop->min, loop->extent, const_false(), task_debug_name(prefix)};
