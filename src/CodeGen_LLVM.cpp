@@ -3,6 +3,10 @@
 #include <sstream>
 
 
+
+
+
+
 #include "CPlusPlusMangle.h"
 #include "CSE.h"
 #include "CodeGen_Internal.h"
@@ -32,6 +36,7 @@
 #include <llvm/Transforms/Tapir/CilkABI.h>
 #include "llvm/Support/Process.h"
 #endif
+
 // MSVC won't set __cplusplus correctly unless certain compiler flags are set
 // (and CMake doesn't set those flags for you even if you specify C++17),
 // so we need to check against _MSVC_LANG as well, for completeness.
@@ -3713,6 +3718,7 @@ void CodeGen_LLVM::visit(const For *op) {
     }
 #ifdef TAPIR_VERSION_MAJOR
     else if (op->for_type == ForType::Parallel) {
+
       
         Value *max = builder->CreateNSWAdd(min, extent);
 
@@ -3753,12 +3759,31 @@ void CodeGen_LLVM::visit(const For *op) {
 	builder->CreateReattach(attach_bb, SyncRegion);
 	destructor_block = destructor_block_old;
 
+
+
+
 	//Update the loop in the attach and check if we should terminate; if we terminate, synch in after; other head to head.
 	builder->SetInsertPoint(attach_bb);
         Value *next_var = builder->CreateNSWAdd(phi, ConstantInt::get(i32_t, 1));
 	phi->addIncoming(next_var, builder->GetInsertBlock());
         Value *end_condition = builder->CreateICmpNE(next_var, max);
-        builder->CreateCondBr(end_condition, head_bb, after_bb);
+        BranchInst *backedge = builder->CreateCondBr(end_condition, head_bb, after_bb);
+
+		//Loop meta data:
+	std::string TapirLoopSpawningStrategy = "tapir.loop.spawn.strategy";
+	const int32_t DACLoopSpawning = 1;
+	std::vector<Metadata *> LoopMetadata;
+	LoopMetadata.push_back(MDNode::get(*context,
+					   { MDString::get(*context,
+							   TapirLoopSpawningStrategy),
+					       ConstantAsMetadata::get(
+								       builder->getInt32(DACLoopSpawning)) }));
+
+	auto TempNode = MDNode::getTemporary(*context, None);
+	LoopMetadata.insert(LoopMetadata.begin(), TempNode.get());
+	auto LoopID = MDNode::get(*context, LoopMetadata);
+	LoopID->replaceOperandWith(0, LoopID);
+        backedge->setMetadata(LLVMContext::MD_loop, LoopID);
 
 	//End and terminate sync
 	builder->SetInsertPoint(after_bb);
@@ -3766,6 +3791,9 @@ void CodeGen_LLVM::visit(const For *op) {
         builder->CreateSync(sync_bb, SyncRegion);
 	SynchRegions.pop_back();
         builder->SetInsertPoint(sync_bb);
+
+
+
 
     }
     #endif

@@ -11,6 +11,7 @@
 #include "Module.h"
 #include "Param.h"
 #include "Simplify.h"
+#include "LLVM_Headers.h"
 
 namespace Halide {
 namespace Internal {
